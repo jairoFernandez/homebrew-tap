@@ -59,6 +59,10 @@ class Litek8s < Formula
     # ../share/litek8s/vm next to its (resolved) binary.
     share.install "share/litek8s" if File.directory?("share/litek8s")
     doc.install Dir["README.md", "NOTICE", "THIRD-PARTY.md"]
+    # \`litek8s completion <shell>\` exists from 0.1.1 on.
+    if Utils.safe_popen_read(bin/"litek8s", "--help").include?("completion")
+      generate_completions_from_executable(bin/"litek8s", "completion")
+    end
   end
 
   def caveats
