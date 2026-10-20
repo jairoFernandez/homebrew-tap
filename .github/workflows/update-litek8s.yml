@@ -1,0 +1,60 @@
+name: update-litek8s
+
+# Keeps Formula/litek8s.rb on the latest litek8s release. Polling (and a
+# manual run) instead of a cross-repo trigger, so no personal access token is
+# needed: this repo's own GITHUB_TOKEN commits the change.
+on:
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (default: the latest)"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-litek8s
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate the formula
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bin/update-litek8s ${{ inputs.tag }}
+
+      - name: Commit if it changed
+        run: |
+          if git diff --quiet; then
+            echo "Formula/litek8s.rb is up to date"
+            exit 0
+          fi
+          version="$(sed -n 's/^  version "\(.*\)"/\1/p' Formula/litek8s.rb)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "litek8s $version"
+          git push
+
+  # The formula installs on every platform it names.
+  test:
+    needs: update
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: Homebrew/actions/setup-homebrew@master
+      - name: Install from this tap
+        run: |
+          brew tap "${GITHUB_REPOSITORY%%/*}/tap" "https://github.com/$GITHUB_REPOSITORY"
+          brew install "${GITHUB_REPOSITORY%%/*}/tap/litek8s"
+          brew test "${GITHUB_REPOSITORY%%/*}/tap/litek8s"
+          litek8s --version
