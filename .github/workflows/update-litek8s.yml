@@ -54,7 +54,17 @@ jobs:
       - uses: Homebrew/actions/setup-homebrew@main
       - name: Install from this tap
         run: |
-          brew tap "${GITHUB_REPOSITORY%%/*}/tap" "https://github.com/$GITHUB_REPOSITORY"
-          brew install "${GITHUB_REPOSITORY%%/*}/tap/litek8s"
-          brew test "${GITHUB_REPOSITORY%%/*}/tap/litek8s"
-          litek8s --version
+          tap="${GITHUB_REPOSITORY%%/*}/tap"
+          brew tap "$tap" "https://github.com/$GITHUB_REPOSITORY"
+          # setup-homebrew taps this repository at the commit that started
+          # the run, before the update job's commit: test what is on main now.
+          dir="$(brew --repository "$tap")"
+          git -C "$dir" fetch --quiet origin main
+          git -C "$dir" checkout --quiet --detach FETCH_HEAD
+          want="$(sed -n 's/^  version "\(.*\)"/\1/p' "$dir/Formula/litek8s.rb")"
+          brew install "$tap/litek8s"
+          brew test "$tap/litek8s"
+          litek8s --version | grep -F "litek8s $want"
+          if litek8s --help | grep -q completion; then
+            ls "$(brew --prefix)/share/zsh/site-functions/_litek8s" "$(brew --prefix)/etc/bash_completion.d/litek8s"
+          fi
